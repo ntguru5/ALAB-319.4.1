@@ -13,6 +13,6 @@ try {
   console.log(err);
 }
 
-const db = await conn.db('sample_training');
+const db = conn.db('sample_training');
 
 export default db;

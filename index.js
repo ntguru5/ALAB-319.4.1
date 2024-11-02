@@ -18,7 +18,7 @@ app.get("/", (req, res) => {
 })
 
 app.use("/grades", grades)
-app.use("/grades", grades_agg);
+app.use("/grades-agg", grades_agg);
 
 
 

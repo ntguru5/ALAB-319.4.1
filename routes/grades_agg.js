@@ -1,10 +1,11 @@
 import express from "express";
 import db from "../db/conn.js";
+import { ObjectId } from "mongodb";
 
 const router = express.Router();
 
 /**
- * It is not best practice to seperate these routes
+ * It is not best practice to separate these routes
  * like we have done here. This file was created
  * specifically for educational purposes, to contain
  * all aggregation routes in one place.
@@ -13,7 +14,7 @@ const router = express.Router();
 /**
  * Grading Weights by Score Type:
  * - Exams: 50%
- * - Quizes: 30%
+ * - Quizzes: 30%
  * - Homework: 20%
  */
 
@@ -80,5 +81,80 @@ router.get("/learner/:id/avg-class", async (req, res) => {
   if (!result) res.send("Not found").status(404);
   else res.send(result).status(200);
 });
+
+
+// Get grades statistics
+router.get('/stats', async (req, res, next) => {
+  try {
+    let collection = await db.collection('grades');
+    let result = await collection.aggregate([
+      {
+        $unwind: "$scores"
+      },
+      {
+        $group: {
+          _id: "$learner_id",
+          examScore: {
+            $avg: {
+              $cond: [{ $eq: ["$scores.type", "exam"] }, "$scores.score", null]
+            }
+          },
+          quizScore: {
+            $avg: {
+              $cond: [{ $eq: ["$scores.type", "quiz"] }, "$scores.score", null]
+            }
+          },
+          homeworkScore: {
+            $avg: {
+              $cond: [{ $eq: ["$scores.type", "homework"] }, "$scores.score", null]
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          weightedAverage: {
+            $add: [
+              { $multiply: ["$examScore", 0.6] },
+              { $multiply: ["$quizScore", 0.3] },
+              { $multiply: ["$homeworkScore", 0.1] }
+            ]
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalLearners: { $sum: 1 },
+          learnersAbove70: { $sum: { $cond: [{ $gte: ["$weightedAverage", 70] }, 1, 0] } },
+          totalAverage: { $sum: "$weightedAverage" }
+        }
+      },
+      {
+        $project: {
+          totalLearners: 1,
+          learnersAbove70: 1,
+          percentageAbove70: {
+            $multiply: [
+              { $divide: ["$learnersAbove70", "$totalLearners"] },
+              100
+            ]
+          },
+          averageScore: {
+            $divide: ["$totalAverage", "$totalLearners"]
+          }
+        }
+      }
+    ]).toArray();
+    if (!result) res.send("Not Found").status(404); // if not found
+    else res.send(result[0]).status(200);
+  } catch (err) {
+    next(err);
+  }
+})
+
+
+
 
 export default router;
