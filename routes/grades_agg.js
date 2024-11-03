@@ -127,6 +127,81 @@ router.get('/stats', async (req, res, next) => {
         $group: {
           _id: null,
           totalLearners: { $sum: 1 },
+          learnersAbove50: { $sum: { $cond: [{ $gte: ["$weightedAverage", 50] }, 1, 0] } },
+          totalAverage: { $sum: "$weightedAverage" }
+        }
+      },
+      {
+        $project: {
+          totalLearners: 1,
+          learnersAbove50: 1,
+          percentageAbove50: {
+            $multiply: [
+              { $divide: ["$learnersAbove50", "$totalLearners"] },
+              100
+            ]
+          },
+          averageScore: {
+            $divide: ["$totalAverage", "$totalLearners"]
+          }
+        }
+      }
+    ]).toArray();
+    if (!result) res.send("Not Found").status(404); // if not found
+    else res.send(result[0]).status(200);
+  } catch (err) {
+    next(err);
+  }
+})
+
+
+// Create GET route for learners within a class that has a class_id = :id
+router.get('/stats/:id', async (req, res, next) => {
+  try {
+    let collection = await db.collection('grades');
+    let result = await collection.aggregate([
+      {
+        $match: { class_id: parseInt(req.params.id) }
+      },
+      {
+        $unwind: "$scores"
+      },
+      {
+        $group: {
+          _id: "$learner_id",
+          examScore: {
+            $avg: {
+              $cond: [{ $eq: ["$scores.type", "exam"] }, "$scores.score", null]
+            }
+          },
+          quizScore: {
+            $avg: {
+              $cond: [{ $eq: ["$scores.type", "quiz"] }, "$scores.score", null]
+            }
+          },
+          homeworkScore: {
+            $avg: {
+              $cond: [{ $eq: ["$scores.type", "homework"] }, "$scores.score", null]
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          weightedAverage: {
+            $add: [
+              { $multiply: ["$examScore", 0.6] },
+              { $multiply: ["$quizScore", 0.3] },
+              { $multiply: ["$homeworkScore", 0.1] }
+            ]
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalLearners: { $sum: 1 },
           learnersAbove70: { $sum: { $cond: [{ $gte: ["$weightedAverage", 70] }, 1, 0] } },
           totalAverage: { $sum: "$weightedAverage" }
         }
@@ -147,14 +222,12 @@ router.get('/stats', async (req, res, next) => {
         }
       }
     ]).toArray();
-    if (!result) res.send("Not Found").status(404); // if not found
+    if (!result) res.send("Not Found").status(404);
     else res.send(result[0]).status(200);
   } catch (err) {
     next(err);
   }
 })
-
-
 
 
 export default router;

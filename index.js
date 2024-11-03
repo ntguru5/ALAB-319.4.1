@@ -17,8 +17,8 @@ app.get("/", (req, res) => {
   res.send("Welcome to the API")
 })
 
+app.use("/grades", grades_agg);
 app.use("/grades", grades)
-app.use("/grades-agg", grades_agg);
 
 
 
